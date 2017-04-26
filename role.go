@@ -3,7 +3,9 @@ package onelogin
 import "golang.org/x/net/context"
 
 // RoleService deals with OneLogin roles.
-type RoleService service
+type RoleService struct {
+	*service
+}
 
 type Role struct {
 	ID   int64  `json:"id"`
