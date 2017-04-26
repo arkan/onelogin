@@ -38,14 +38,14 @@ type Client struct {
 
 	common service // Reuse a single struct instead of allocating one for each service on the heap.
 
-	oauthToken *OauthToken
+	oauthToken *oauthToken
 
 	Oauth *OauthService
 	User  *UserService
+	Role  *RoleService
+	Group *GroupService
 	// SAMLService  *SAMLService
-	// RoleService  *RoleService
 	// EventService *EventService
-	// GroupService *GroupService
 
 	sync.Mutex
 }
@@ -62,8 +62,14 @@ func New(clientID, clientSecret, shard, subdomain string) *Client {
 	c.BaseURL, _ = url.Parse(buildURL(baseURL, shard))
 	c.Oauth = (*OauthService)(&c.common)
 	c.User = (*UserService)(&c.common)
+	c.Role = (*RoleService)(&c.common)
+	c.Group = (*GroupService)(&c.common)
 
 	return c
+}
+
+type urlQuery struct {
+	AfterCursor string `url:"after_cursor,omitempty"`
 }
 
 // addOptions adds the parameters in opt as URL query parameters to s. opt
@@ -98,14 +104,14 @@ func (c *Client) AddAuthorization(ctx context.Context, req *http.Request) error 
 	if c.oauthToken == nil {
 		var err error
 
-		c.oauthToken, err = c.Oauth.GetToken(ctx)
+		c.oauthToken, err = c.Oauth.getToken(ctx)
 		if err != nil {
 			return err
 		}
 	}
 
-	if c.oauthToken.IsExpired() {
-		if err := c.oauthToken.Refresh(ctx); err != nil {
+	if c.oauthToken.isExpired() {
+		if err := c.oauthToken.refresh(ctx); err != nil {
 			return err
 		}
 	}

@@ -2,6 +2,7 @@ package onelogin
 
 import (
 	"context"
+	"fmt"
 )
 
 // UserService handles communications with the authentication related methods on OneLogin.
@@ -14,9 +15,9 @@ type User struct {
 	Email                string            `json:"email"`
 	Username             string            `json:"username"`
 	FirstName            string            `json:"firstname"`
-	GroupID              int               `json:"group_id"`
-	ID                   int               `json:"id"`
-	InvalidLoginAttempts int               `json:"invalid_login_attempts"`
+	GroupID              int64             `json:"group_id"`
+	ID                   int64             `json:"id"`
+	InvalidLoginAttempts int64             `json:"invalid_login_attempts"`
 	InvitationSentAt     string            `json:"invitation_sent_at"`
 	LastLogin            string            `json:"last_login"`
 	LastName             string            `json:"lastname"`
@@ -26,16 +27,16 @@ type User struct {
 	LocaleCode           string            `json:"locale_code"`
 	PasswordChangedAt    string            `json:"password_changed_at"`
 	Phone                string            `json:"phone"`
-	Status               int               `json:"status"`
+	Status               int64             `json:"status"`
 	UpdatedAt            string            `json:"updated_at"`
 	DistinguishedName    string            `json:"distinguished_name"`
-	ExternalID           int               `json:"external_id"`
-	DirectoryID          int               `json:"directory_id"`
+	ExternalID           string            `json:"external_id"`
+	DirectoryID          int64             `json:"directory_id"`
 	MemberOf             []string          `json:"member_of"`
 	SamAccountName       string            `json:"samaccountname"`
 	UserPrincipalName    string            `json:"userprincipalname"`
 	ManagerAdID          int               `json:"manager_ad_id"`
-	RoleIDs              []int             `json:"role_id"`
+	RoleIDs              []int64           `json:"role_id"`
 	CustomAttributes     map[string]string `json:"custom_attributes"`
 }
 
@@ -44,10 +45,10 @@ type getUserQuery struct {
 }
 
 // GetUsers returns all the OneLogin users.
-func (s *UserService) GetUsers(ctx context.Context) ([]User, error) {
+func (s *UserService) GetUsers(ctx context.Context) ([]*User, error) {
 	u := "/api/1/users"
 
-	var users []User
+	var users []*User
 	var afterCursor string
 
 	for {
@@ -65,7 +66,7 @@ func (s *UserService) GetUsers(ctx context.Context) ([]User, error) {
 			return nil, err
 		}
 
-		var us []User
+		var us []*User
 		resp, err := s.client.Do(ctx, req, &us)
 		if err != nil {
 			return nil, err
@@ -79,4 +80,27 @@ func (s *UserService) GetUsers(ctx context.Context) ([]User, error) {
 	}
 
 	return users, nil
+}
+
+// GetUser returns a OneLogin user.
+func (s *UserService) GetUser(ctx context.Context, id int64) (*User, error) {
+	u := fmt.Sprintf("/api/1/users/%v", id)
+
+	var users []*User
+
+	req, err := s.client.NewRequest("GET", u, nil)
+	if err != nil {
+		return nil, err
+	}
+
+	if err := s.client.AddAuthorization(ctx, req); err != nil {
+		return nil, err
+	}
+
+	_, err = s.client.Do(ctx, req, &users)
+	if err != nil {
+		return nil, err
+	}
+
+	return users[0], nil
 }

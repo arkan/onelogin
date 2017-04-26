@@ -2,6 +2,7 @@ package onelogin
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"time"
 )
@@ -30,9 +31,9 @@ type getTokenResponse struct {
 	TokenType    string `json:"token_type"`
 }
 
-// An OauthToken authenticates request to OneLogin.
+// An oauthToken authenticates request to OneLogin.
 // It is valid for 3600 seconds, and can be renewed.
-type OauthToken struct {
+type oauthToken struct {
 	AccessToken string
 	AccountID   int
 	CreatedAt   time.Time
@@ -43,13 +44,13 @@ type OauthToken struct {
 	client       *Client
 }
 
-// IsExpired check the OauthToken validity.
-func (t *OauthToken) IsExpired() bool {
+// isExpired check the OauthToken validity.
+func (t *oauthToken) isExpired() bool {
 	return time.Now().UTC().Add(-time.Second * time.Duration(t.ExpiresIn)).After(t.CreatedAt.UTC())
 }
 
-// Refresh the token. The current token gets updates with new valid values.
-func (t *OauthToken) Refresh(ctx context.Context) error {
+// refresh the token. The current token gets updates with new valid values.
+func (t *oauthToken) refresh(ctx context.Context) error {
 	u := "/auth/oauth2/token"
 	b := issueTokenParams{
 		GrantType:    "refresh_token",
@@ -78,8 +79,8 @@ func (t *OauthToken) Refresh(ctx context.Context) error {
 	return nil
 }
 
-// GetToken issues a new token.
-func (s *OauthService) GetToken(ctx context.Context) (*OauthToken, error) {
+// getToken issues a new token.
+func (s *OauthService) getToken(ctx context.Context) (*oauthToken, error) {
 	u := "/auth/oauth2/token"
 
 	b := issueTokenParams{
@@ -98,7 +99,7 @@ func (s *OauthService) GetToken(ctx context.Context) (*OauthToken, error) {
 	}
 
 	createdAt, _ := time.Parse(time.RFC3339Nano, r[0].CreatedAt)
-	token := &OauthToken{
+	token := &oauthToken{
 		AccessToken:  r[0].AccessToken,
 		AccountID:    r[0].AccountID,
 		CreatedAt:    createdAt,
@@ -111,9 +112,26 @@ func (s *OauthService) GetToken(ctx context.Context) (*OauthToken, error) {
 	return token, nil
 }
 
+type authenticateResponse struct {
+	Status       string             `json:"status"`
+	User         *AuthenticatedUser `json:"user"`
+	ReturnToURL  string             `json:"return_to_url"`
+	ExpiresAt    string             `json:"expires_at"`
+	SessionToken string             `json:"session_token"`
+}
+
+// AuthenticatedUser contains user information for the Authentication.
+type AuthenticatedUser struct {
+	ID        int64  `json:"id"`
+	Username  string `json:"username"`
+	Email     string `json:"email"`
+	FirstName string `json:"firstname"`
+	LastName  string `json:"lastname"`
+}
+
 // Authenticate a user from an email(or username) and a password.
 // It returns nil on success.
-func (s *OauthService) Authenticate(ctx context.Context, emailOrUsername string, password string) error {
+func (s *OauthService) Authenticate(ctx context.Context, emailOrUsername string, password string) (*AuthenticatedUser, error) {
 	u := "/api/1/login/auth"
 
 	a := authenticationParams{
@@ -124,17 +142,22 @@ func (s *OauthService) Authenticate(ctx context.Context, emailOrUsername string,
 
 	req, err := s.client.NewRequest("POST", u, a)
 	if err != nil {
-		return err
+		return nil, err
 	}
 
 	if err := s.client.AddAuthorization(ctx, req); err != nil {
-		return err
+		return nil, err
 	}
 
-	_, err = s.client.Do(ctx, req, nil)
+	var d []authenticateResponse
+	_, err = s.client.Do(ctx, req, &d)
 	if err != nil {
-		return err
+		return nil, err
 	}
 
-	return nil
+	if len(d) != 1 || d[0].Status != "Authenticated" {
+		return nil, errors.New("authentication failed")
+	}
+
+	return d[0].User, nil
 }
