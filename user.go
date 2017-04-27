@@ -104,3 +104,28 @@ func (s *UserService) GetUser(ctx context.Context, id int64) (*User, error) {
 
 	return users[0], nil
 }
+
+// UpdateCustomAttributes returns a OneLogin user.
+func (s *UserService) UpdateCustomAttributes(ctx context.Context, id int64, attributes map[string]string) error {
+	u := fmt.Sprintf("/api/1/users/%v/set_custom_attributes", id)
+
+	post := map[string]interface{}{
+		"custom_attributes": attributes,
+	}
+
+	req, err := s.client.NewRequest("PUT", u, post)
+	if err != nil {
+		return err
+	}
+
+	if err := s.client.AddAuthorization(ctx, req); err != nil {
+		return err
+	}
+
+	_, err = s.client.Do(ctx, req, nil)
+	if err != nil {
+		return err
+	}
+
+	return nil
+}
