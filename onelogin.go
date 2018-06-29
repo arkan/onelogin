@@ -10,6 +10,7 @@ import (
 	"net/http"
 	"net/url"
 	"reflect"
+	"strings"
 	"sync"
 
 	"github.com/google/go-querystring/query"
@@ -44,7 +45,7 @@ type Client struct {
 	User  *UserService
 	Role  *RoleService
 	Group *GroupService
-	// SAMLService  *SAMLService
+	SAML  *SAMLService
 	// EventService *EventService
 
 	sync.Mutex
@@ -64,6 +65,7 @@ func New(clientID, clientSecret, shard, subdomain string) *Client {
 	c.User = (*UserService)(&c.common)
 	c.Role = (*RoleService)(&c.common)
 	c.Group = (*GroupService)(&c.common)
+	c.SAML = (*SAMLService)(&c.common)
 
 	return c
 }
@@ -169,7 +171,26 @@ func (c *Client) Do(ctx context.Context, req *http.Request, v interface{}) (*Res
 				err = nil // ignore EOF errors caused by empty response body.
 			}
 
-			err = json.Unmarshal(m.Data, v)
+			if _, ok := v.(*SamlResponse); !ok {
+				err = json.Unmarshal(m.Data, v)
+			}
+
+			if original, ok := v.(*SamlResponse); ok {
+				original.SetSamlString(string(m.Data))
+			}
+
+			if original, ok := v.(*[]authenticateResponse); ok {
+				requiresMfaString := strings.ToLower("MFA Is required for this user")
+				requiresMfa := strings.ToLower(m.Status.Message) == requiresMfaString
+				(*original)[0].User.SetMfaRequirement(requiresMfa)
+				(*original)[0].User.SetDevices((*original)[0].Devices)
+			}
+
+			if original, ok := v.(*[]MFAResponse); ok {
+				requiresMfaString := strings.ToLower("MFA Is required for this user")
+				requiresMfa := strings.ToLower(m.Status.Message) == requiresMfaString
+				(*original)[0].User.SetMfaRequirement(requiresMfa)
+			}
 
 			if m.Pagination != nil {
 				response.PaginationAfterCursor = m.Pagination.AfterCursor

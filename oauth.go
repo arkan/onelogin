@@ -118,19 +118,29 @@ type authenticateResponse struct {
 	ReturnToURL  string             `json:"return_to_url"`
 	ExpiresAt    string             `json:"expires_at"`
 	SessionToken string             `json:"session_token"`
+	Devices      []Device           `json:"devices"`
 }
 
 // AuthenticatedUser contains user information for the Authentication.
 type AuthenticatedUser struct {
-	ID        int64  `json:"id"`
-	Username  string `json:"username"`
-	Email     string `json:"email"`
-	FirstName string `json:"firstname"`
-	LastName  string `json:"lastname"`
+	ID            int64  `json:"id"`
+	Username      string `json:"username"`
+	Email         string `json:"email"`
+	FirstName     string `json:"firstname"`
+	LastName      string `json:"lastname"`
+	Devices       []Device
+	IsMfaRequired bool
+}
+
+func (u *AuthenticatedUser) SetMfaRequirement(required bool) {
+	u.IsMfaRequired = required
+}
+
+func (u *AuthenticatedUser) SetDevices(devices []Device) {
+	u.Devices = devices
 }
 
 // Authenticate a user from an email(or username) and a password.
-// It returns nil on success.
 func (s *OauthService) Authenticate(ctx context.Context, emailOrUsername string, password string) (*AuthenticatedUser, error) {
 	u := "/api/1/login/auth"
 
@@ -155,7 +165,7 @@ func (s *OauthService) Authenticate(ctx context.Context, emailOrUsername string,
 		return nil, err
 	}
 
-	if len(d) != 1 || d[0].Status != "Authenticated" {
+	if len(d) != 1 || (d[0].Status != "Authenticated" && !d[0].User.IsMfaRequired) {
 		return nil, errors.New("authentication failed")
 	}
 
