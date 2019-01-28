@@ -8,12 +8,8 @@ import (
 )
 
 // OauthService handles communications with the authentication related methods on OneLogin.
-type OauthService service
-
-type authenticationParams struct {
-	Username  string `json:"username_or_email"`
-	Password  string `json:"password"`
-	Subdomain string `json:"subdomain"`
+type OauthService struct {
+	*service
 }
 
 type issueTokenParams struct {
@@ -110,54 +106,4 @@ func (s *OauthService) getToken(ctx context.Context) (*oauthToken, error) {
 	}
 
 	return token, nil
-}
-
-type authenticateResponse struct {
-	Status       string             `json:"status"`
-	User         *AuthenticatedUser `json:"user"`
-	ReturnToURL  string             `json:"return_to_url"`
-	ExpiresAt    string             `json:"expires_at"`
-	SessionToken string             `json:"session_token"`
-}
-
-// AuthenticatedUser contains user information for the Authentication.
-type AuthenticatedUser struct {
-	ID        int64  `json:"id"`
-	Username  string `json:"username"`
-	Email     string `json:"email"`
-	FirstName string `json:"firstname"`
-	LastName  string `json:"lastname"`
-}
-
-// Authenticate a user from an email(or username) and a password.
-// It returns nil on success.
-func (s *OauthService) Authenticate(ctx context.Context, emailOrUsername string, password string) (*AuthenticatedUser, error) {
-	u := "/api/1/login/auth"
-
-	a := authenticationParams{
-		Username:  emailOrUsername,
-		Password:  password,
-		Subdomain: s.client.subdomain,
-	}
-
-	req, err := s.client.NewRequest("POST", u, a)
-	if err != nil {
-		return nil, err
-	}
-
-	if err := s.client.AddAuthorization(ctx, req); err != nil {
-		return nil, err
-	}
-
-	var d []authenticateResponse
-	_, err = s.client.Do(ctx, req, &d)
-	if err != nil {
-		return nil, err
-	}
-
-	if len(d) != 1 || d[0].Status != "Authenticated" {
-		return nil, errors.New("authentication failed")
-	}
-
-	return d[0].User, nil
 }

@@ -41,6 +41,7 @@ type Client struct {
 	oauthToken *oauthToken
 
 	Oauth *OauthService
+	Login *LoginService
 	User  *UserService
 	Role  *RoleService
 	Group *GroupService
@@ -60,10 +61,11 @@ func New(clientID, clientSecret, shard, subdomain string) *Client {
 	}
 	c.common.client = c
 	c.BaseURL, _ = url.Parse(buildURL(baseURL, shard))
-	c.Oauth = (*OauthService)(&c.common)
-	c.User = (*UserService)(&c.common)
-	c.Role = (*RoleService)(&c.common)
-	c.Group = (*GroupService)(&c.common)
+	c.Oauth = &OauthService{service: &c.common}
+	c.Login = &LoginService{service: &c.common}
+	c.User = &UserService{service: &c.common}
+	c.Role = &RoleService{service: &c.common}
+	c.Group = &GroupService{service: &c.common}
 
 	return c
 }
@@ -169,7 +171,10 @@ func (c *Client) Do(ctx context.Context, req *http.Request, v interface{}) (*Res
 				err = nil // ignore EOF errors caused by empty response body.
 			}
 
-			err = json.Unmarshal(m.Data, v)
+			// some responses don't contain a data field (e.g., SMS push)
+			if m.Data != nil {
+				err = json.Unmarshal(m.Data, v)
+			}
 
 			if m.Pagination != nil {
 				response.PaginationAfterCursor = m.Pagination.AfterCursor

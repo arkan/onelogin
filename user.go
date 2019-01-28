@@ -6,7 +6,9 @@ import (
 )
 
 // UserService handles communications with the authentication related methods on OneLogin.
-type UserService service
+type UserService struct {
+	*service
+}
 
 // User represents a OneLogin user.
 type User struct {

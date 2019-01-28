@@ -3,7 +3,9 @@ package onelogin
 import "golang.org/x/net/context"
 
 // GroupService deals with OneLogin groups.
-type GroupService service
+type GroupService struct {
+	*service
+}
 
 type Group struct {
 	ID   int64  `json:"id"`
