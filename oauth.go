@@ -2,7 +2,6 @@ package onelogin
 
 import (
 	"context"
-	"errors"
 	"fmt"
 	"time"
 )
