@@ -1,6 +1,10 @@
 package onelogin
 
-import "golang.org/x/net/context"
+import (
+	"fmt"
+
+	"golang.org/x/net/context"
+)
 
 // RoleService deals with OneLogin roles.
 type RoleService struct {
@@ -48,4 +52,26 @@ func (s *RoleService) GetRoles(ctx context.Context) ([]*Role, error) {
 	}
 
 	return roles, nil
+}
+
+// GetRole returns a OneLogin role specified by its ID.
+func (s *RoleService) GetRole(ctx context.Context, id int64) (*Role, error) {
+	u := fmt.Sprintf("/api/1/roles/%v", id)
+
+	req, err := s.client.NewRequest("GET", u, nil)
+	if err != nil {
+		return nil, err
+	}
+
+	if err := s.client.AddAuthorization(ctx, req); err != nil {
+		return nil, err
+	}
+
+	var roles []*Role
+	_, err = s.client.Do(ctx, req, &roles)
+	if err != nil {
+		return nil, err
+	}
+
+	return roles[0], nil
 }
