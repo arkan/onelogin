@@ -4,7 +4,7 @@ OneLogin client written in Go.
 
 [![GoDoc](https://godoc.org/github.com/asobrien/onelogin?status.svg)](https://godoc.org/github.com/asobrien/onelogin)
 [![Go Report Card](https://goreportcard.com/badge/github.com/asobrien/onelogin)](https://goreportcard.com/report/github.com/asobrien/onelogin)
-
+[![Build Status](https://cloud.drone.io/api/badges/asobrien/onelogin/status.svg)](https://cloud.drone.io/asobrien/onelogin)
 
 This is a fork of [arkan/onelogin](https://github.com/arkan/onelogin) that has been extended to
 implement authentication methods that support MFA.
