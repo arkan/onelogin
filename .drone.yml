@@ -1,23 +1,70 @@
-local Pipeline(name, image) = {
-  kind: "pipeline",
-  name: name,
-  steps: [
-    {
-      name: "test",
-      image: image,
-      commands: [
-        "go get",
-        "go test"
-      ]
-    }
-  ]
-};
+kind: pipeline
+name: test-go-1.7
 
-[
-  Pipeline("go-1-7", "golang:1.7"),
-  Pipeline("go-1-8", "golang:1.8"),
-  Pipeline("go-1-9", "golang:1.9"),
-  Pipeline("go-1-10", "golang:1.10"),
-  Pipeline("go-1-11", "golang:1.11"),
-  Pipeline("go-1-12", "golang:1.12"),
-]
+steps:
+- name: test
+  image: golang:1.7
+  commands:
+  - go get
+  - go test
+
+---
+
+kind: pipeline
+name: test-go-1.8
+
+steps:
+- name: test
+  image: golang:1.8
+  commands:
+  - go get
+  - go test
+
+---
+
+kind: pipeline
+name: test-go-1.9
+
+steps:
+- name: test
+  image: golang:1.9
+  commands:
+  - go get
+  - go test
+
+---
+
+kind: pipeline
+name: test-go-1.10
+
+steps:
+- name: test
+  image: golang:1.10
+  commands:
+  - go get
+  - go test
+
+---
+
+kind: pipeline
+name: test-go-1.11
+
+steps:
+- name: test
+  image: golang:1.11
+  commands:
+  - go get
+  - go test
+
+---
+
+kind: pipeline
+name: test-go-1.12
+
+steps:
+- name: test
+  image: golang:1.12
+  commands:
+  - go get
+  - go test
+
