@@ -6,6 +6,8 @@ import (
 	"time"
 )
 
+var now = time.Now
+
 // OauthService handles communications with the authentication related methods on OneLogin.
 type OauthService struct {
 	*service
@@ -41,7 +43,16 @@ type oauthToken struct {
 
 // isExpired check the OauthToken validity.
 func (t *oauthToken) isExpired() bool {
-	return time.Now().UTC().Add(-time.Second * time.Duration(t.ExpiresIn)).After(t.CreatedAt.UTC())
+	// TimeNow - TokenLifetime <AFTER> TimeTokenCreated ?
+	return now().UTC().Add(-time.Second * time.Duration(t.ExpiresIn)).After(t.CreatedAt.UTC())
+}
+
+// isNearExpired checks the OauthToken validity. The token my still be active
+// but it is nearly expired (within 60s). This function is very similar to
+// isExpired but is more aggresive since it uses a synthetic expiration time.
+func (t *oauthToken) isNearExpired() bool {
+	// TimeNow <AFTER> TokenTimeCreated + (TokenLifetime - 60s) ?
+	return now().UTC().After(t.CreatedAt.UTC().Add(time.Second * time.Duration(t.ExpiresIn-60)))
 }
 
 // refresh the token. The current token gets updates with new valid values.
