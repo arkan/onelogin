@@ -98,7 +98,7 @@ func addOptions(s string, opt interface{}) (string, error) {
 
 // AddAuthorization injects the Authorization header to the request.
 // If the client doesn't has an oauthToken, a new token is issed.
-// If the token is expired, it is automatically refreshed.
+// If the token is nearly expired, it is automatically refreshed.
 func (c *Client) AddAuthorization(ctx context.Context, req *http.Request) error {
 	c.Lock()
 	defer c.Unlock()
@@ -112,7 +112,7 @@ func (c *Client) AddAuthorization(ctx context.Context, req *http.Request) error 
 		}
 	}
 
-	if c.oauthToken.isExpired() {
+	if c.oauthToken.isNearExpired() {
 		if err := c.oauthToken.refresh(ctx); err != nil {
 			return err
 		}
