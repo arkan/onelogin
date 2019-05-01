@@ -1,13 +1,9 @@
 kind: pipeline
-name: test-go-1.7
-
-workspace:
-  base: /go
-  path: src/github.com/asobrien/onelogin
+name: test-go-1.12
 
 steps:
 - name: test
-  image: golang:1.7
+  image: golang:1.12
   commands:
   - go get
   - go test
@@ -15,31 +11,11 @@ steps:
 ---
 
 kind: pipeline
-name: test-go-1.8
-
-workspace:
-  base: /go
-  path: src/github.com/asobrien/onelogin
+name: test-go-1.11
 
 steps:
 - name: test
-  image: golang:1.8
-  commands:
-  - go get
-  - go test
-
----
-
-kind: pipeline
-name: test-go-1.9
-
-workspace:
-  base: /go
-  path: src/github.com/asobrien/onelogin
-
-steps:
-- name: test
-  image: golang:1.9
+  image: golang:1.11
   commands:
   - go get
   - go test
@@ -63,11 +39,15 @@ steps:
 ---
 
 kind: pipeline
-name: test-go-1.11
+name: test-go-1.9
+
+workspace:
+  base: /go
+  path: src/github.com/asobrien/onelogin
 
 steps:
 - name: test
-  image: golang:1.11
+  image: golang:1.9
   commands:
   - go get
   - go test
@@ -75,11 +55,31 @@ steps:
 ---
 
 kind: pipeline
-name: test-go-1.12
+name: test-go-1.8
+
+workspace:
+  base: /go
+  path: src/github.com/asobrien/onelogin
 
 steps:
 - name: test
-  image: golang:1.12
+  image: golang:1.8
+  commands:
+  - go get
+  - go test
+
+---
+
+kind: pipeline
+name: test-go-1.7
+
+workspace:
+  base: /go
+  path: src/github.com/asobrien/onelogin
+
+steps:
+- name: test
+  image: golang:1.7
   commands:
   - go get
   - go test
