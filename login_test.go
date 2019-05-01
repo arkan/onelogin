@@ -1,4 +1,4 @@
-package onelogin
+package onelogin_test
 
 import (
 	"bufio"
