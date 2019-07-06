@@ -129,3 +129,24 @@ func (s *UserService) UpdateCustomAttributes(ctx context.Context, id int64, attr
 
 	return nil
 }
+
+// DeleteUser delete a OneLogin user.
+func (s *UserService) DeleteUser(ctx context.Context, id int64) error {
+	u := fmt.Sprintf("/api/1/users/%v", id)
+
+	req, err := s.client.NewRequest("DELETE", u, nil)
+	if err != nil {
+		return err
+	}
+
+	if err := s.client.AddAuthorization(ctx, req); err != nil {
+		return err
+	}
+
+	_, err = s.client.Do(ctx, req, nil)
+	if err != nil {
+		return err
+	}
+
+	return nil
+}
