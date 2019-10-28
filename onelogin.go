@@ -12,6 +12,7 @@ import (
 	"reflect"
 	"strings"
 	"sync"
+	"time"
 
 	"github.com/google/go-querystring/query"
 )
@@ -53,8 +54,12 @@ type Client struct {
 
 // New returns a new OneLogin client.
 func New(clientID, clientSecret, shard, subdomain string) *Client {
+	httpClient := &http.Client{
+		Timeout: time.Second * 30,
+	}
+
 	c := &Client{
-		client:       http.DefaultClient,
+		client:       httpClient,
 		clientID:     clientID,
 		clientSecret: clientSecret,
 		subdomain:    subdomain,
