@@ -65,7 +65,7 @@ type ErrorResponse struct {
 	StatusCode int    `json:"statusCode"`
 }
 
-func (s *SAMLService) SamlAssertion(ctx context.Context, username, password, appID string) (*SAMLResponse, error) {
+func (s *SAMLService) SamlAssertion(ctx context.Context, username, password, appID string) (*MFAResponse, error) {
 	u := "/api/2/saml_assertion"
 	a := stateTokenParams{
 		Username:  username,
@@ -85,7 +85,7 @@ func (s *SAMLService) SamlAssertion(ctx context.Context, username, password, app
 	if err != nil {
 		return nil, err
 	}
-	return samlResp, nil
+	return &samlResp.MFAResponse, nil
 }
 
 func (s *SAMLService) VerifyFactor(ctx context.Context, otp, stateToken, appId, deviceId string) (string, error) {
