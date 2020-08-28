@@ -57,7 +57,7 @@ func (s *SamlResponse) SetSamlString(saml string) {
 }
 
 func (s *SAMLService) SamlAssertion(ctx context.Context, username, password, appID string) (*MFAResponse, error) {
-	u := "/api/1/saml_assertion"
+	u := "/api/2/saml_assertion"
 	a := stateTokenParams{
 		Username:  username,
 		Password:  password,
@@ -80,7 +80,7 @@ func (s *SAMLService) SamlAssertion(ctx context.Context, username, password, app
 }
 
 func (s *SAMLService) VerifyFactor(ctx context.Context, otp, stateToken, appId, deviceId string) (string, error) {
-	u := "/api/1/saml_assertion/verify_factor"
+	u := "/api/2/saml_assertion/verify_factor"
 	a := samlRequestParams{
 		OtpToken:   otp,
 		DeviceID:   deviceId,
