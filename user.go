@@ -44,6 +44,11 @@ type getUserQuery struct {
 	AfterCursor string `url:"after_cursor,omitempty"`
 }
 
+type App struct {
+	ID   int64  `json:"id"`
+	Name string `json:"name"`
+}
+
 // GetUsers returns all the OneLogin users.
 func (s *UserService) GetUsers(ctx context.Context) ([]*User, error) {
 	u := "/api/1/users"
@@ -103,6 +108,24 @@ func (s *UserService) GetUser(ctx context.Context, id int64) (*User, error) {
 	}
 
 	return users[0], nil
+}
+
+func (s *UserService) GetApps(ctx context.Context, id int64) (*[]App, error) {
+	u := fmt.Sprintf("/api/1/users/%v/apps", id)
+
+	var userApps []App
+
+	req, err := s.client.NewRequest("GET", u, nil)
+	if err != nil {
+		return nil, err
+	}
+	if err := s.client.AddAuthorization(ctx, req); err != nil {
+		return nil, err
+	}
+	if _, err := s.client.Do(ctx, req, &userApps); err != nil {
+		return nil, err
+	}
+	return &userApps, nil
 }
 
 // UpdateCustomAttributes returns a OneLogin user.

@@ -10,7 +10,9 @@ import (
 	"net/http"
 	"net/url"
 	"reflect"
+	"strings"
 	"sync"
+	"time"
 
 	"github.com/google/go-querystring/query"
 )
@@ -44,7 +46,7 @@ type Client struct {
 	User  *UserService
 	Role  *RoleService
 	Group *GroupService
-	// SAMLService  *SAMLService
+	SAML  *SAMLService
 	// EventService *EventService
 
 	sync.Mutex
@@ -52,8 +54,12 @@ type Client struct {
 
 // New returns a new OneLogin client.
 func New(clientID, clientSecret, shard, subdomain string) *Client {
+	httpClient := &http.Client{
+		Timeout: time.Second * 30,
+	}
+
 	c := &Client{
-		client:       http.DefaultClient,
+		client:       httpClient,
 		clientID:     clientID,
 		clientSecret: clientSecret,
 		subdomain:    subdomain,
@@ -64,6 +70,7 @@ func New(clientID, clientSecret, shard, subdomain string) *Client {
 	c.User = (*UserService)(&c.common)
 	c.Role = (*RoleService)(&c.common)
 	c.Group = (*GroupService)(&c.common)
+	c.SAML = (*SAMLService)(&c.common)
 
 	return c
 }
@@ -111,7 +118,9 @@ func (c *Client) AddAuthorization(ctx context.Context, req *http.Request) error 
 	}
 
 	if c.oauthToken.isExpired() {
-		if err := c.oauthToken.refresh(ctx); err != nil {
+		var err error = nil
+		c.oauthToken, err = c.Oauth.getToken(ctx)
+		if err != nil {
 			return err
 		}
 	}
@@ -171,6 +180,12 @@ func (c *Client) Do(ctx context.Context, req *http.Request, v interface{}) (*Res
 
 			err = json.Unmarshal(m.Data, v)
 
+			if original, ok := v.(*[]MFAResponse); ok {
+				requiresMfaString := strings.ToLower("MFA Is required for this user")
+				requiresMfa := strings.ToLower(m.Status.Message) == requiresMfaString
+				(*original)[0].User.SetMfaRequirement(requiresMfa)
+			}
+
 			if m.Pagination != nil {
 				response.PaginationAfterCursor = m.Pagination.AfterCursor
 				response.PaginationBeforeCursor = m.Pagination.BeforeCursor
@@ -179,10 +194,6 @@ func (c *Client) Do(ctx context.Context, req *http.Request, v interface{}) (*Res
 	}
 
 	return response, err
-}
-
-func newResponse(resp *http.Response) *Response {
-	return &Response{Response: resp}
 }
 
 // NewRequest instantiate a new http.Request from a method, url and body.
@@ -221,6 +232,46 @@ func (c *Client) NewRequest(method, urlStr string, body interface{}) (*http.Requ
 	return req, nil
 }
 
+func buildURL(baseURL string, args ...interface{}) string {
+	return fmt.Sprintf(baseURL, args...)
+}
+
+func newResponse(resp *http.Response) *Response {
+	return &Response{Response: resp}
+}
+
+// Response embeds a *http.Response as well as some Paginations values.
+type Response struct {
+	*http.Response
+
+	PaginationAfterCursor  *string
+	PaginationBeforeCursor *string
+}
+
+// CheckResponse checks the *http.Response.
+// HTTP status codes ranging from 200 to 299 are considered are successes.
+// Otherwise an error happen, and the error gets unmarshalled and returned into the error.
+func CheckResponse(r *http.Response) error {
+	if c := r.StatusCode; 200 <= c && c <= 299 {
+		return nil
+	}
+
+	ErrorResponseV1 := &ErrorResponseV1{
+		Response: r,
+	}
+	data, err := ioutil.ReadAll(r.Body)
+	if err == nil && data != nil {
+		var m responseMessage
+		_ = json.Unmarshal(data, &m)
+		ErrorResponseV1.Code = m.Status.Code
+		ErrorResponseV1.Type = m.Status.Type
+		ErrorResponseV1.Message = m.Status.Message
+	}
+
+	// TODO: handle the different errors here, such as MFA, Rate limit, etc...
+	return ErrorResponseV1
+}
+
 type responseMessage struct {
 	Status struct {
 		Code    int64  `json:"code"`
@@ -234,37 +285,7 @@ type responseMessage struct {
 	Data json.RawMessage `json:"data"`
 }
 
-// CheckResponse checks the *http.Response.
-// HTTP status codes ranging from 200 to 299 are considered are successes.
-// Otherwise an error happen, and the error gets unmarshalled and returned into the error.
-func CheckResponse(r *http.Response) error {
-	if c := r.StatusCode; 200 <= c && c <= 299 {
-		return nil
-	}
-
-	errorResponse := &ErrorResponse{Response: r}
-	data, err := ioutil.ReadAll(r.Body)
-	if err == nil && data != nil {
-		var m responseMessage
-		_ = json.Unmarshal(data, &m)
-		errorResponse.Code = m.Status.Code
-		errorResponse.Type = m.Status.Type
-		errorResponse.Message = m.Status.Message
-	}
-
-	// TODO: handle the different errors here, such as MFA, Rate limit, etc...
-	return errorResponse
-}
-
-// Response embeds a *http.Response as well as some Paginations values.
-type Response struct {
-	*http.Response
-
-	PaginationAfterCursor  *string
-	PaginationBeforeCursor *string
-}
-
-// An ErrorResponse reports an error caused by an API request.
+// An ErrorResponseV1V1 reports an error caused by an API request.
 // Onelogin always returns Code, Type and a Message associated to the error.
 // Example:
 // {
@@ -276,7 +297,7 @@ type Response struct {
 //                     Content-Type header must be set to application/json"
 //     }
 // }
-type ErrorResponse struct {
+type ErrorResponseV1 struct {
 	Response *http.Response // HTTP response that caused this error
 
 	Code    int64
@@ -284,12 +305,8 @@ type ErrorResponse struct {
 	Message string
 }
 
-func (r *ErrorResponse) Error() string {
+func (r *ErrorResponseV1) Error() string {
 	return fmt.Sprintf("%v %v: OneLogin responsed with code %d, type %v and message %v",
 		r.Response.Request.Method, r.Response.Request.URL,
 		r.Response.StatusCode, r.Type, r.Message)
-}
-
-func buildURL(baseURL string, args ...interface{}) string {
-	return fmt.Sprintf(baseURL, args...)
 }

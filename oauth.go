@@ -2,8 +2,11 @@ package onelogin
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"fmt"
+	"io/ioutil"
+	"net/http"
 	"time"
 )
 
@@ -22,13 +25,23 @@ type issueTokenParams struct {
 	RefreshToken string `json:"refresh_token,omitempty"`
 }
 
-type getTokenResponse struct {
+type GetTokenResponse struct {
 	AccessToken  string `json:"access_token"`
 	AccountID    int    `json:"account_id"`
 	CreatedAt    string `json:"created_at"`
 	ExpiresIn    int64  `json:"expires_in"`
 	RefreshToken string `json:"refresh_token"`
 	TokenType    string `json:"token_type"`
+}
+
+type GenerateTokenResponse struct {
+	GetTokenResponse
+	Status struct {
+		Error   bool   `json:"error"`
+		Code    int    `json:"code"`
+		Type    string `json:"type"`
+		Message string `json:"message`
+	} `json:"status"`
 }
 
 // An oauthToken authenticates request to OneLogin.
@@ -49,39 +62,9 @@ func (t *oauthToken) isExpired() bool {
 	return time.Now().UTC().Add(-time.Second * time.Duration(t.ExpiresIn)).After(t.CreatedAt.UTC())
 }
 
-// refresh the token. The current token gets updates with new valid values.
-func (t *oauthToken) refresh(ctx context.Context) error {
-	u := "/auth/oauth2/token"
-	b := issueTokenParams{
-		GrantType:    "refresh_token",
-		AccessToken:  t.AccessToken,
-		RefreshToken: t.refreshToken,
-	}
-	req, err := t.client.NewRequest("POST", u, b)
-	if err != nil {
-		return err
-	}
-
-	var r []getTokenResponse
-	_, err = t.client.Do(ctx, req, &r)
-	if err != nil {
-		return err
-	}
-
-	createdAt, _ := time.Parse(time.RFC3339Nano, r[0].CreatedAt)
-	t.AccessToken = r[0].AccessToken
-	t.AccountID = r[0].AccountID
-	t.CreatedAt = createdAt
-	t.ExpiresIn = r[0].ExpiresIn
-	t.TokenType = r[0].TokenType
-	t.refreshToken = r[0].RefreshToken
-
-	return nil
-}
-
 // getToken issues a new token.
 func (s *OauthService) getToken(ctx context.Context) (*oauthToken, error) {
-	u := "/auth/oauth2/token"
+	u := "/auth/oauth2/v2/token"
 
 	b := issueTokenParams{
 		GrantType: "client_credentials",
@@ -92,45 +75,67 @@ func (s *OauthService) getToken(ctx context.Context) (*oauthToken, error) {
 	}
 	req.Header.Set("Authorization", fmt.Sprintf("client_id: %s, client_secret: %s", s.client.clientID, s.client.clientSecret))
 
-	var r []getTokenResponse
-	_, err = s.client.Do(ctx, req, &r)
+	generatedToken, err := s.client.DoOAuthGenerate(ctx, req)
 	if err != nil {
 		return nil, err
 	}
 
-	createdAt, _ := time.Parse(time.RFC3339Nano, r[0].CreatedAt)
+	if generatedToken.Status.Error {
+		return nil, fmt.Errorf("onelogin oauth error: %v (%v) - %v", generatedToken.Status.Type, generatedToken.Status.Code, generatedToken.Status.Message)
+	}
+
+	createdAt, _ := time.Parse(time.RFC3339Nano, generatedToken.CreatedAt)
 	token := &oauthToken{
-		AccessToken:  r[0].AccessToken,
-		AccountID:    r[0].AccountID,
+		AccessToken:  generatedToken.AccessToken,
+		AccountID:    generatedToken.AccountID,
 		CreatedAt:    createdAt,
-		ExpiresIn:    r[0].ExpiresIn,
-		TokenType:    r[0].TokenType,
-		refreshToken: r[0].RefreshToken,
+		ExpiresIn:    generatedToken.ExpiresIn,
+		TokenType:    generatedToken.TokenType,
+		refreshToken: generatedToken.RefreshToken,
 		client:       s.client,
 	}
 
 	return token, nil
 }
 
-type authenticateResponse struct {
-	Status       string             `json:"status"`
-	User         *AuthenticatedUser `json:"user"`
-	ReturnToURL  string             `json:"return_to_url"`
-	ExpiresAt    string             `json:"expires_at"`
-	SessionToken string             `json:"session_token"`
+type AuthenticateResponse struct {
+	Status struct {
+		Error   bool   `json:"error"`
+		Code    int    `json:"code"`
+		Type    string `json:"type"`
+		Message string `json:"message`
+	} `json:"status"`
+	Data []struct {
+		Status       string            `json:"status"`
+		User         AuthenticatedUser `json:"user"`
+		ReturnToURL  string            `json:"return_to_url"`
+		ExpiresAt    string            `json:"expires_at"`
+		SessionToken string            `json:"session_token"`
+		StateToken   string            `json:"state_token"`
+		Devices      []Device          `json:"devices"`
+	} `json:"data"`
 }
 
 // AuthenticatedUser contains user information for the Authentication.
 type AuthenticatedUser struct {
-	ID        int64  `json:"id"`
-	Username  string `json:"username"`
-	Email     string `json:"email"`
-	FirstName string `json:"firstname"`
-	LastName  string `json:"lastname"`
+	ID            int64  `json:"id"`
+	Username      string `json:"username"`
+	Email         string `json:"email"`
+	FirstName     string `json:"firstname"`
+	LastName      string `json:"lastname"`
+	Devices       []Device
+	IsMfaRequired bool
+}
+
+func (u *AuthenticatedUser) SetMfaRequirement(required bool) {
+	u.IsMfaRequired = required
+}
+
+func (u *AuthenticatedUser) SetDevices(devices []Device) {
+	u.Devices = devices
 }
 
 // Authenticate a user from an email(or username) and a password.
-// It returns nil on success.
 func (s *OauthService) Authenticate(ctx context.Context, emailOrUsername string, password string) (*AuthenticatedUser, error) {
 	u := "/api/1/login/auth"
 
@@ -149,15 +154,79 @@ func (s *OauthService) Authenticate(ctx context.Context, emailOrUsername string,
 		return nil, err
 	}
 
-	var d []authenticateResponse
-	_, err = s.client.Do(ctx, req, &d)
+	loginResp, err := s.client.DoLogin(ctx, req)
 	if err != nil {
 		return nil, err
 	}
 
-	if len(d) != 1 || d[0].Status != "Authenticated" {
-		return nil, errors.New("authentication failed")
+	if loginResp.Status.Error {
+		return nil, fmt.Errorf("login failed for onelogin: %v (%v) - %v", loginResp.Status.Type, loginResp.Status.Code, loginResp.Status.Message)
 	}
 
-	return d[0].User, nil
+	if len(loginResp.Data) <= 0 {
+		return nil, errors.New("onelogin returned no user for login action")
+	}
+
+	if loginResp.Data[0].Status == "Authenticated" {
+		return &loginResp.Data[0].User, nil
+	}
+
+	if loginResp.Status.Message == "MFA is required for this user" && len(loginResp.Data[0].Devices) > 0 {
+		return &loginResp.Data[0].User, nil
+	}
+
+	return nil, fmt.Errorf("no valid user recieve from onelogin login")
+}
+
+func (c *Client) DoOAuthGenerate(ctx context.Context, req *http.Request) (*GenerateTokenResponse, error) {
+	req = req.WithContext(ctx)
+
+	resp, err := c.client.Do(req)
+	if err != nil {
+		return nil, err
+	}
+
+	body, err := ioutil.ReadAll(resp.Body)
+	if err != nil {
+		return nil, err
+	}
+
+	var oauthResp *GenerateTokenResponse = nil
+	err = json.Unmarshal(body, oauthResp)
+	if err != nil {
+		return nil, err
+	}
+
+	if oauthResp == nil {
+		return nil, errors.New("OAuth response is nil")
+	}
+
+	return oauthResp, nil
+
+}
+
+func (c *Client) DoLogin(ctx context.Context, req *http.Request) (*AuthenticateResponse, error) {
+	req = req.WithContext(ctx)
+
+	resp, err := c.client.Do(req)
+	if err != nil {
+		return nil, err
+	}
+
+	body, err := ioutil.ReadAll(resp.Body)
+	if err != nil {
+		return nil, err
+	}
+
+	var loginResp *AuthenticateResponse = nil
+	err = json.Unmarshal(body, loginResp)
+	if err != nil {
+		return nil, err
+	}
+
+	if loginResp == nil {
+		return nil, errors.New("login response is nil")
+	}
+
+	return loginResp, nil
 }
